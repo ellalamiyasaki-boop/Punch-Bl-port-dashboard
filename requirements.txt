@@ -5,3 +5,4 @@ yfinance
 plotly
 scipy
 matplotlib
+jinja2
