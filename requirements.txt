@@ -6,3 +6,4 @@ plotly
 scipy
 matplotlib
 jinja2
+requests
