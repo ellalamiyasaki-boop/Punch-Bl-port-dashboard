@@ -34,12 +34,6 @@ def fetch_market_data(tickers: List[str], period: str = '2y') -> Tuple[pd.DataFr
     
     return prices, w_mkt_arr, sectors
 
-@st.cache_data
-def convert_df_to_csv(df: pd.DataFrame) -> bytes:
-    # ใช้ utf-8-sig เพื่อให้เปิดใน Excel แล้วสัญลักษณ์/ภาษาไทยไม่เพี้ยน
-    return df.to_csv(index=True).encode('utf-8-sig')
-
-
 
 
 
@@ -281,10 +275,7 @@ def main():
             s3.metric("Stressed Value-at-Risk", f"{stressed_var:.2%}", " regime-shifted limit", delta_color="inverse")
             s4.metric("Stressed Portfolio Value", f"${stressed_ending_val:,.2f}", f"Loss Impact: ${stressed_ending_val - total_capital:,.2f}", delta_color="inverse")
 
-        col_matrix_title, col_matrix_btn = st.columns([4, 1])
-        with col_matrix_title:
-         st.markdown("### 💸 Asset Allocation Matrix & Brinson Attribution")
-
+        st.markdown("### 💸 Asset Allocation Matrix & Brinson Attribution")
         allocation_effect = active_weights * (pi.values - bmk_ret)
         selection_effect = w_mkt.values * (mu_bl.values - pi.values)
         interaction_effect = active_weights * (mu_bl.values - pi.values)
@@ -300,17 +291,6 @@ def main():
         summary_df["Interact. Effect"] = interaction_effect
         summary_df["Currency Effect"] = currency_effect
         summary_df["Asset Capital Value"] = asset_capital_values
-
-        with col_matrix_btn:
-          st.write("") 
-          csv_data = convert_df_to_csv(summary_df)
-          st.download_button(
-          label="📥 Download (CSV)",
-          data=csv_data,
-          file_name="asset_allocation_matrix.csv",
-          mime="text/csv",
-          use_container_width=True
-    )
 
         st.dataframe(summary_df.style.format({
             "Market Weight (Bmk)": "{:.2%}", "Optimal Weight (BL)": "{:.2%}", "Active Weight": "{:.2%}",
