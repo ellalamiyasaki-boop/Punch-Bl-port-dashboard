@@ -7,22 +7,65 @@ import plotly.express as px
 from scipy.optimize import minimize
 from scipy.stats import norm
 from typing import Tuple, List, Dict
+import requests
 
 # --- [ใหม่] ฟังก์ชันโหลดข้อมูลแบบมี Cache และทำ Data Cleaning ---
+# @st.cache_data(ttl=3600)
+# def fetch_market_data(tickers: List[str], period: str = '2y') -> Tuple[pd.DataFrame, np.ndarray, List[str]]:
+#     # 1. โหลดราคาและจัดการ NaN
+#     prices = yf.download(tickers, period=period)['Close']
+#     if isinstance(prices, pd.Series):
+#         prices = prices.to_frame(name=tickers[0])
+#     prices = prices.ffill().bfill() # ป้องกันข้อมูลแหว่งจากหุ้นใหม่
+    
+#     # 2. โหลด Metadata (ทำรอบเดียวเก็บ Cache ไว้เลย)
+#     caps = []
+#     sectors = []
+#     for t in tickers:
+#         try:
+#             info = yf.Ticker(t).info
+#             caps.append(info.get('marketCap', info.get('totalAssets', 1e9)))
+#             sectors.append(info.get('sector', 'Financials/Other'))
+#         except Exception:
+#             caps.append(1e9)
+#             sectors.append('Unknown')
+
+#     total_cap = sum(caps) if sum(caps) > 0 else 1e9
+#     w_mkt_arr = np.array(caps) / total_cap
+    
+#     return prices, w_mkt_arr, sectors
+
+
 @st.cache_data(ttl=3600)
 def fetch_market_data(tickers: List[str], period: str = '2y') -> Tuple[pd.DataFrame, np.ndarray, List[str]]:
-    # 1. โหลดราคาและจัดการ NaN
-    prices = yf.download(tickers, period=period)['Close']
+    # 1. สร้าง Session และใส่ Header เพื่อปลอมตัวเป็น Browser ของมนุษย์
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive'
+    })
+
+    # 2. โหลดราคาโดยแนบ Session เข้าไปด้วย
+    prices = yf.download(tickers, period=period, session=session)['Close']
+    
+    # ดักจับ Error เผื่อถูกบล็อกระดับขั้นสูงสุด
+    if prices.empty or prices.isna().all().all():
+        st.error("⚠️ Server ถูกจำกัดการเชื่อมต่อจาก Yahoo Finance ชั่วคราว กรุณารอสักครู่แล้วกดล้าง Cache (Clear cache)")
+        st.stop()
+
     if isinstance(prices, pd.Series):
         prices = prices.to_frame(name=tickers[0])
-    prices = prices.ffill().bfill() # ป้องกันข้อมูลแหว่งจากหุ้นใหม่
+    prices = prices.ffill().bfill() 
     
-    # 2. โหลด Metadata (ทำรอบเดียวเก็บ Cache ไว้เลย)
+    # 3. โหลด Metadata โดยแนบ Session
     caps = []
     sectors = []
     for t in tickers:
         try:
-            info = yf.Ticker(t).info
+            ticker_obj = yf.Ticker(t, session=session) # <--- แนบ session ตรงนี้ด้วย
+            info = ticker_obj.info
             caps.append(info.get('marketCap', info.get('totalAssets', 1e9)))
             sectors.append(info.get('sector', 'Financials/Other'))
         except Exception:
@@ -33,6 +76,7 @@ def fetch_market_data(tickers: List[str], period: str = '2y') -> Tuple[pd.DataFr
     w_mkt_arr = np.array(caps) / total_cap
     
     return prices, w_mkt_arr, sectors
+
 
 @st.cache_data
 def convert_df_to_csv(df: pd.DataFrame) -> bytes:
